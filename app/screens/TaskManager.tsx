@@ -4,13 +4,33 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import DraggableFlatList from 'react-native-draggable-flatlist';
 import { Task } from '@/utils/types';
 import { generateUUID } from '@/utils/generateUUID';
-import { Button, Card, TextInput, List, Checkbox } from 'react-native-paper';
+import { Button, Card, TextInput, List, Checkbox, Menu } from 'react-native-paper';
+
 
 export default function TaskManager() {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [newTaskTitle, setNewTaskTitle] = useState<string>('');
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
     const [editingTaskTitle, setEditingTaskTitle] = useState<string>('');
+    const [visible, setVisible] = useState(false);
+    const [selectedFilter, setSelectedFilter] = useState<string>("All");
+    const [selectedTasks, setSelectedTasks] = useState<Task[]>(tasks);
+
+    const toggleMenu = () => setVisible(!visible);
+
+    const filterTask = () => {
+        switch (selectedFilter) {
+            case "Completed":
+                setSelectedTasks(tasks.filter(task => task.completed));
+                return;
+            case "Incompleted":
+                setSelectedTasks(tasks.filter(task => task.completed === false));
+                return;
+            default:
+                setSelectedTasks(tasks);
+                return 
+        }
+    }
 
     useEffect(() => {
         loadTasksFromStorage();
@@ -20,18 +40,25 @@ export default function TaskManager() {
         saveTasksToStorage(tasks);
     }, [tasks]);
 
+    useEffect(() => {
+        filterTask();
+    }, [selectedFilter, tasks]);
+
     const addTask = () => {
         if (!newTaskTitle) return;
         const newTask: Task = { id: generateUUID(), title: newTaskTitle, completed: false };
         setTasks([...tasks, newTask]);
+        setSelectedTasks([...selectedTasks, newTask]);
         setNewTaskTitle('');
     };
 
     const deleteTask = (taskId: string) => {
+        setSelectedTasks(selectedTasks.filter(task => task.id !== taskId));
         setTasks(tasks.filter(task => task.id !== taskId));
     };
 
     const editTask = (taskId: string, newTitle: string) => {
+        setSelectedTasks(selectedTasks.map(task => (task.id === taskId ? { ...task, title: newTitle } : task)));
         setTasks(tasks.map(task => (task.id === taskId ? { ...task, title: newTitle } : task)));
         setEditingTaskId(null);
         setEditingTaskTitle('');
@@ -43,6 +70,7 @@ export default function TaskManager() {
     };
 
     const toggleTaskCompletion = (taskId: string) => {
+        setSelectedTasks(selectedTasks.map(task => (task.id === taskId ? { ...task, completed: !task.completed } : task)));
         setTasks(tasks.map(task => (task.id === taskId ? { ...task, completed: !task.completed } : task)));
     };
 
@@ -84,9 +112,20 @@ export default function TaskManager() {
                 Add Task
             </Button>
 
+            {/* Dropdown for filtering */}
+            <Menu
+                visible={visible}
+                onDismiss={toggleMenu}
+                anchor={<Button onPress={toggleMenu} style={styles.button} mode="contained">Filter: {selectedFilter}</Button>}
+            >
+                <Menu.Item onPress={() => { setSelectedFilter('All'); toggleMenu(); }} title="All" />
+                <Menu.Item onPress={() => { setSelectedFilter('Incompleted'); toggleMenu(); }} title="Incompleted" />
+                <Menu.Item onPress={() => { setSelectedFilter('Completed'); toggleMenu(); }} title="Completed" />
+            </Menu>
+
             {/* Draggable Task List */}
             <DraggableFlatList
-                data={tasks}
+                data={selectedTasks}
                 keyExtractor={(item) => item.id}
                 onDragEnd={({ data }) => reorderTasks(data)}
                 renderItem={({ item, drag }) => (
